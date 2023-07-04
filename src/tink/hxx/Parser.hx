@@ -107,6 +107,43 @@ class Parser extends ParserBase<Position, haxe.macro.Error> {
       default: e.map(reenter);
     }
 
+  /**
+    This fixes up an EObjectDecl that contains one or more fields build using string interpolation.
+    Context.parseInlineString will parse the expression in "{ field: ${value} }" as an EMeta
+    where the metadata entry is $ and the expression is the inner part; this passed thru no prob
+    before Haxe 4.3, but now generates a Reification $ is not allowed... error in haxe 4.3
+  **/
+  function fixObjectDecl(e:haxe.macro.Expr) {
+    switch (e.expr) {
+      case EObjectDecl(fields):
+        final newFields:Array<ObjectField> = fields.map(field -> {
+          return switch (field.expr.expr) {
+            case EMeta(s, e2) if (s.name == '$'):
+              {
+                field: field.field,
+                // Not exposed in ObjectField declaration, but observed in
+                // actual data
+                name_pos: Reflect.field(field, 'name_pos'),
+                quotes: field.quotes,
+                expr: {
+                  pos: e2.pos,
+                  expr: e2.expr
+                }
+              }
+            case _:
+              field;
+          }
+        });
+        return {
+          pos: e.pos,
+          expr: EObjectDecl(newFields)
+        };
+      case _:
+        // All others, just return the expression passed in
+        return e;
+    }
+  }
+
   function parseExpr(source:String, pos:Position, ?mayBeEmpty:Bool) {
     source = ~/\/\*[\s\S]*?\*\//g.replace(source, '');
     if (source.trim().length == 0)
@@ -115,7 +152,7 @@ class Parser extends ParserBase<Position, haxe.macro.Error> {
 
     return
       reenter(
-        try Context.parseInlineString(source, pos)
+        try fixObjectDecl(Context.parseInlineString(source, pos))
         catch (e:haxe.macro.Error) throw e
         catch (e:Dynamic) pos.error(e)
       );

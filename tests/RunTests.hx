@@ -59,6 +59,12 @@ class RunTests {
     return asserts.done();
   }
 
+  public function stringInterpolation() {
+    final height = "20px";
+    asserts.assert(Plain.hxx('<div style={{ height: ${height} }} />') == Plain.hxx('<div style={{ height: "20px" }}/>'));
+    return asserts.done();
+  }
+
   public function splat() {
     var o1 = { foo: 'o1', bar: '123' };
     var o2 = { foo: 'o2', baz: 'o2' };
